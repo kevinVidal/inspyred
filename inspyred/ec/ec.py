@@ -7,26 +7,21 @@
     
     .. Copyright 2012 Aaron Garrett
 
-    .. Permission is hereby granted, free of charge, to any person obtaining a copy
-       of this software and associated documentation files (the "Software"), to deal
-       in the Software without restriction, including without limitation the rights
-       to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-       copies of the Software, and to permit persons to whom the Software is
-       furnished to do so, subject to the following conditions:
+    .. This program is free software: you can redistribute it and/or modify
+       it under the terms of the GNU General Public License as published by
+       the Free Software Foundation, either version 3 of the License, or
+       (at your option) any later version.
 
-    .. The above copyright notice and this permission notice shall be included in
-       all copies or substantial portions of the Software.
+    .. This program is distributed in the hope that it will be useful,
+       but WITHOUT ANY WARRANTY; without even the implied warranty of
+       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+       GNU General Public License for more details.
 
-    .. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-       IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-       FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-       AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-       LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-       OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-       THE SOFTWARE.       
-        
+    .. You should have received a copy of the GNU General Public License
+       along with this program.  If not, see <http://www.gnu.org/licenses/>.
+       
     .. module:: ec
-    .. moduleauthor:: Aaron Garrett <garrett@inspiredintelligence.io>
+    .. moduleauthor:: Aaron Garrett <aaron.lee.garrett@gmail.com>
 """
 import collections
 import copy
@@ -362,21 +357,21 @@ class EvolutionaryComputation(object):
         terminate = False
         fname = ''
         if isinstance(self.terminator, collections.Iterable):
-            terminators = self.terminator
+            for clause in self.terminator:
+                self.logger.debug('termination test using {0} at generation {1} and evaluation {2}'.format(clause.__name__, ng, ne))
+                terminate = terminate or clause(population=pop, num_generations=ng, num_evaluations=ne, args=self._kwargs)
+                if terminate:
+                    fname = clause.__name__
+                    break
         else:
-            terminators = [self.terminator]
-
-        for clause in terminators:
-            self.logger.debug('termination test using {0} at generation {1} and evaluation {2}'.format(clause.__name__, ng, ne))
-            terminate = terminate or clause(population=pop, num_generations=ng, num_evaluations=ne, args=self._kwargs)
-            if terminate:
-                fname = clause.__name__
-                break
-
+            self.logger.debug('termination test using {0} at generation {1} and evaluation {2}'.format(self.terminator.__name__, ng, ne))
+            terminate = self.terminator(population=pop, num_generations=ng, num_evaluations=ne, args=self._kwargs)
+            fname = self.terminator.__name__
         if terminate:
             self.termination_cause = fname
             self.logger.debug('termination from {0} at generation {1} and evaluation {2}'.format(self.termination_cause, ng, ne))
         return terminate
+        
     
     def evolve(self, generator, evaluator, pop_size=100, seeds=None, maximize=True, bounder=None, **args):
         """Perform the evolution.
@@ -454,31 +449,30 @@ class EvolutionaryComputation(object):
         self.archive = self.archiver(random=self._random, population=list(self.population), archive=list(self.archive), args=self._kwargs)
         self.logger.debug('archive size is now {0}'.format(len(self.archive)))
         self.logger.debug('population size is now {0}'.format(len(self.population)))
-
-        # Turn observers and variators into lists if not already
+                
         if isinstance(self.observer, collections.Iterable):
-            observers = self.observer
+            for obs in self.observer:
+                self.logger.debug('observation using {0} at generation {1} and evaluation {2}'.format(obs.__name__, self.num_generations, self.num_evaluations))
+                obs(population=list(self.population), num_generations=self.num_generations, num_evaluations=self.num_evaluations, args=self._kwargs)
         else:
-            observers = [self.observer]
-        if isinstance(self.variator, collections.Iterable):
-            variators = self.variator
-        else:
-            variators = [self.variator]
-
-        for obs in observers:
-            self.logger.debug('observation using {0} at generation {1} and evaluation {2}'.format(obs.__name__, self.num_generations, self.num_evaluations))
-            obs(population=list(self.population), num_generations=self.num_generations, num_evaluations=self.num_evaluations, args=self._kwargs)
+            self.logger.debug('observation using {0} at generation {1} and evaluation {2}'.format(self.observer.__name__, self.num_generations, self.num_evaluations))
+            self.observer(population=list(self.population), num_generations=self.num_generations, num_evaluations=self.num_evaluations, args=self._kwargs)
         
         while not self._should_terminate(list(self.population), self.num_generations, self.num_evaluations):
             # Select individuals.
             self.logger.debug('selection using {0} at generation {1} and evaluation {2}'.format(self.selector.__name__, self.num_generations, self.num_evaluations))
             parents = self.selector(random=self._random, population=list(self.population), args=self._kwargs)
             self.logger.debug('selected {0} candidates'.format(len(parents)))
-            offspring_cs = [copy.deepcopy(i.candidate) for i in parents]
+            parent_cs = [copy.deepcopy(i.candidate) for i in parents]
+            offspring_cs = parent_cs
             
-            for op in variators:
-                self.logger.debug('variation using {0} at generation {1} and evaluation {2}'.format(op.__name__, self.num_generations, self.num_evaluations))
-                offspring_cs = op(random=self._random, candidates=offspring_cs, args=self._kwargs)
+            if isinstance(self.variator, collections.Iterable):
+                for op in self.variator:
+                    self.logger.debug('variation using {0} at generation {1} and evaluation {2}'.format(op.__name__, self.num_generations, self.num_evaluations))
+                    offspring_cs = op(random=self._random, candidates=offspring_cs, args=self._kwargs)
+            else:
+                self.logger.debug('variation using {0} at generation {1} and evaluation {2}'.format(self.variator.__name__, self.num_generations, self.num_evaluations))
+                offspring_cs = self.variator(random=self._random, candidates=offspring_cs, args=self._kwargs)
             self.logger.debug('created {0} offspring'.format(len(offspring_cs)))
             
             # Evaluate offspring.
@@ -511,12 +505,15 @@ class EvolutionaryComputation(object):
             self.logger.debug('population size is now {0}'.format(len(self.population)))
             
             self.num_generations += 1
-            for obs in observers:
-                self.logger.debug('observation using {0} at generation {1} and evaluation {2}'.format(obs.__name__, self.num_generations, self.num_evaluations))
-                obs(population=list(self.population), num_generations=self.num_generations, num_evaluations=self.num_evaluations, args=self._kwargs)
-
+            if isinstance(self.observer, collections.Iterable):
+                for obs in self.observer:
+                    self.logger.debug('observation using {0} at generation {1} and evaluation {2}'.format(obs.__name__, self.num_generations, self.num_evaluations))
+                    obs(population=list(self.population), num_generations=self.num_generations, num_evaluations=self.num_evaluations, args=self._kwargs)
+            else:
+                self.logger.debug('observation using {0} at generation {1} and evaluation {2}'.format(self.observer.__name__, self.num_generations, self.num_evaluations))
+                self.observer(population=list(self.population), num_generations=self.num_generations, num_evaluations=self.num_evaluations, args=self._kwargs)
         return self.population
-
+        
 
 class GA(EvolutionaryComputation):
     """Evolutionary computation representing a canonical genetic algorithm.
@@ -578,7 +575,7 @@ class ES(EvolutionaryComputation):
     
     .. math::
     
-        \\sigma_i^\\prime = \\sigma_i * e^{\\tau \\cdot N(0, 1) + \\tau^\prime \\cdot N(0, 1)}
+        \\sigma_i^\\prime = \\sigma_i + e^{\\tau \\cdot N(0, 1) + \\tau^\prime \\cdot N(0, 1)}
         
         \\sigma_i^\\prime = max(\\sigma_i^\\prime, \\epsilon)
     

@@ -7,26 +7,21 @@
 
     .. Copyright 2012 Aaron Garrett
 
-    .. Permission is hereby granted, free of charge, to any person obtaining a copy
-       of this software and associated documentation files (the "Software"), to deal
-       in the Software without restriction, including without limitation the rights
-       to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-       copies of the Software, and to permit persons to whom the Software is
-       furnished to do so, subject to the following conditions:
+    .. This program is free software: you can redistribute it and/or modify
+       it under the terms of the GNU General Public License as published by
+       the Free Software Foundation, either version 3 of the License, or
+       (at your option) any later version.
 
-    .. The above copyright notice and this permission notice shall be included in
-       all copies or substantial portions of the Software.
+    .. This program is distributed in the hope that it will be useful,
+       but WITHOUT ANY WARRANTY; without even the implied warranty of
+       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+       GNU General Public License for more details.
 
-    .. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-       IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-       FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-       AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-       LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-       OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-       THE SOFTWARE.       
-        
+    .. You should have received a copy of the GNU General Public License
+       along with this program.  If not, see <http://www.gnu.org/licenses/>.
+       
     .. module:: analysis
-    .. moduleauthor:: Aaron Garrett <garrett@inspiredintelligence.io>
+    .. moduleauthor:: Aaron Garrett <aaron.lee.garrett@gmail.com>
 """
 import csv
 import math
@@ -88,7 +83,7 @@ def fitness_statistics(population):
             'median': med_fit, 'std': std_fit}
             
 
-def generation_plot(file, errorbars=True):
+def generation_plot(file, errorbars=True, save_file=None):
     """Plot the results of the algorithm using generation statistics.
     
     This function creates a plot of the generation fitness statistics 
@@ -123,7 +118,7 @@ def generation_plot(file, errorbars=True):
     median = []
     average = []
     stdev = []
-    reader = csv.reader(file)
+    reader = csv.reader(open(file))
     for row in reader:
         generation.append(int(row[0]))
         psize.append(int(row[1]))
@@ -137,7 +132,7 @@ def generation_plot(file, errorbars=True):
     data = [average, median, best, worst]
     colors = ['black', 'blue', 'green', 'red']
     labels = ['average', 'median', 'best', 'worst']
-    figure = plt.figure()
+    figure = plt.figure(figsize=(6,4))
     if errorbars:
         plt.errorbar(generation, average, stderr, color=colors[0], label=labels[0])
     else:
@@ -154,10 +149,15 @@ def generation_plot(file, errorbars=True):
     plt.legend(loc='upper left', prop=prop)    
     plt.xlabel('Generation')
     plt.ylabel('Fitness')
-    plt.show()    
+    figure.tight_layout()
+    ## added by kevin VIDAL
+    if save_file == None:
+        plt.show() 
+    else:
+        plt.savefig(save_file)
 
     
-def allele_plot(file, normalize=False, alleles=None, generations=None):
+def allele_plot(file, normalize=False, alleles=None, generations=None, save_file=None):
     """Plot the alleles from each generation from the individuals file.
     
     This function creates a plot of the individual allele values as they
@@ -201,7 +201,12 @@ def allele_plot(file, normalize=False, alleles=None, generations=None):
         g = int(row[0])
         row[3] = row[3].replace('[', '')
         row[-1] = row[-1].replace(']', '')
-        individual = [float(r) for r in row[3:]]
+        row_list = [r.split() for r in row[3:]][0]
+        try:
+            # for backward with initial inspyred
+            individual = [float(r) for r in row[3:]]
+        except:
+            individual = [float(r) for r in row_list]
         individual.append(float(row[2]))
         try:
             generation_data[g]
@@ -232,7 +237,9 @@ def allele_plot(file, normalize=False, alleles=None, generations=None):
                 avg[i] += allele
         for i, a in enumerate(avg):
             avg[i] /= float(len(gen))
-        average.append(avg)        
+        average.append(avg) 
+        
+    figure = plt.figure(figsize=(6,8))
     
     for plot_num, (data, title) in enumerate(zip([best, median, average], 
                                                  ["Best", "Median", "Average"])):
@@ -251,7 +258,7 @@ def allele_plot(file, normalize=False, alleles=None, generations=None):
         for g in generations:
             plot_data.append([data[g][a] for a in alleles])
         sub = plt.subplot(3, 1, plot_num + 1)
-        plt.pcolor(plt.array(plot_data))
+        plt.pcolor(plot_data)
         plt.colorbar()
         step_size = max(len(generations) // 7, 1)
         ytick_locs = list(range(step_size, len(generations), step_size))
@@ -266,7 +273,14 @@ def allele_plot(file, normalize=False, alleles=None, generations=None):
         else:
             plt.setp(sub.get_xticklabels(), visible=False)
         plt.title(title)
-    plt.show()
+        
+    figure.tight_layout()
+    ## added by kevin VIDAL
+    if save_file == None:
+        plt.show() 
+    else:
+        plt.savefig(save_file)
+    
 
     
 def hypervolume(pareto_set, reference_point=None):
